@@ -1,1 +1,1 @@
-# Standalonen MGBF for ensemble localiztion
+# Standalonen MGBF for ensemble localization
