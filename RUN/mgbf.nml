@@ -41,10 +41,13 @@
 !
 !Number of 2d and 3d variables
 
-   km2=4,km3=6,
-   n_ens=20,
+!   km2=4,km3=6,
+   km2=0,km3=6,
+   n_ens=50,
    l_loc=.false.
    l_loc_vertical=.false.,
+   l_filt_g1 =.false.,
+   l_lin_vertical=.true.,
 
 !For standalone tests (plotting)
 !    ldelta=.false.,
