@@ -34,6 +34,10 @@ public upsending_all
 public downsending_all
 public weighting_all
 
+public upsending_ens
+public downsending_ens
+public weighting_ens
+
 
 public upsending
 public downsending
@@ -361,6 +365,122 @@ integer(i_kind):: iL,jL,i,j
 
 !-----------------------------------------------------------------------
                         endsubroutine downsending2
+
+!&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+                        subroutine upsending_ens                        &
+!***********************************************************************
+!                                                                      !
+!  Adjoint interpolate and upsend:                                     !
+!       First from g1->g2 (V -> H)                                     !
+!       Then  from g2->...->gn  (H -> H)                               !
+!                                                                      !
+!***********************************************************************
+(V,H,kmx)
+!-----------------------------------------------------------------------
+implicit none
+
+integer(i_kind), intent(in):: kmx
+real(r_kind),dimension(kmx,1-hx:im+hx,1-hy:jm+hy),intent(in):: V
+real(r_kind),dimension(kmx,1-hx:im+hx,1-hy:jm+hy),intent(out):: H
+
+real(r_kind),dimension(kmx,-1:imL+2,-1:jmL+2):: V_INT
+real(r_kind),dimension(kmx,-1:imL+2,-1:jmL+2):: H_INT
+integer(i_kind):: g,L
+!-----------------------------------------------------------------------
+!
+! From generation 1 to generation 2
+!
+
+        call adjoint(V(1:kmx,1:im,1:jm),V_INT,kmx,1) 
+
+                                                 call btim(     bocoT_tim)
+        call bocoT_2d(V_INT,kmx,imL,jmL,2,2)
+                                                 call etim(     bocoT_tim)
+
+        call upsend_all(V_INT(1:kmx,1:imL,1:jmL),H,kmx)
+!
+! From generation 2 sequentially to higher generations
+!
+  do g=2,gm-1 
+
+    if(g==my_hgen) then
+        call adjoint(H(1:kmx,1:im,1:jm),H_INT,kmx,g) 
+    endif
+
+                                                 call btim(     bocoT_tim)
+        call bocoT_2d(H_INT,kmx,imL,jmL,2,2,FimaxL,FjmaxL,g,g)
+                                                 call etim(     bocoT_tim)
+
+        call upsend_all(H_INT(1:kmx,1:imL,1:jmL),H,kmx,g,g+1)
+
+  end do    
+
+
+!-----------------------------------------------------------------------
+                        endsubroutine upsending_ens
+
+!&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+                        subroutine downsending_ens                      &
+!***********************************************************************
+!                                                                      !
+!  Downsend, interpolate and add:                                      !
+!      First from gm->g3...->g2                                        !
+!      Then  from g2->g1                                               !
+!                                                                      !
+!***********************************************************************
+(H,V,kmx)
+!-----------------------------------------------------------------------
+implicit none
+
+integer(i_kind), intent(in):: kmx
+real(r_kind),dimension(kmx,1-hx:im+hx,1-hy:jm+hy),intent(inout):: H
+real(r_kind),dimension(kmx,1-hx:im+hx,1-hy:jm+hy),intent(inout):: V
+
+real(r_kind),dimension(kmx,-1:imL+2,-1:jmL+2):: H_INT
+real(r_kind),dimension(kmx,-1:imL+2,-1:jmL+2):: V_INT
+real(r_kind),dimension(kmx,1:im,1:jm):: H_PROX
+real(r_kind),dimension(kmx,1:im,1:jm):: V_PROX
+integer(i_kind):: g,l,k
+integer(i_kind):: iL,jL,i,j
+!-----------------------------------------------------------------------
+!
+! Upper generations
+!
+    do g=gm,3,-1
+
+        call downsend_all(H(1:kmx,1:im,1:jm),H_INT(1:kmx,1:imL,1:jmL),kmx,g,g-1)
+
+                                                 call btim(     boco_tim)
+        call boco_2d(H_INT,kmx,imL,jmL,2,2,FimaxL,FjmaxL,g-1,g-1)
+                                                 call etim(     boco_tim)
+
+      if(my_hgen==g-1) then
+        call direct1(H_INT,H_PROX,kmx,g-1)
+        H(1:kmx,1:im,1:jm)=H     (1:kmx,1:im,1:jm)                      &
+                          +H_PROX(1:kmx,1:im,1:jm)
+      endif
+
+    enddo
+
+!
+! From geneartion 2 to generation 1
+!
+
+        call downsend_all(H(1:kmx,1:im,1:jm),V_INT(1:kmx,1:imL,1:jmL),kmx)
+          H(:,:,:)=0.
+
+                                                 call btim(     boco_tim)
+        call boco_2d(V_INT,kmx,imL,jmL,2,2)
+                                                 call etim(     boco_tim)
+
+        call direct1(V_INT,V_PROX,kmx,1)
+
+          V(1:kmx,1:im,1:jm)=V     (1:kmx,1:im,1:jm)                    &
+                             +V_PROX(1:kmx,1:im,1:jm)
+
+!-----------------------------------------------------------------------
+                        endsubroutine downsending_ens
+
 
 !&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
                         subroutine upsending_loc_g3                     &
@@ -762,6 +882,49 @@ endif
                         endsubroutine weighting 
 
 !&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+                        subroutine weighting_ens                        &
+!***********************************************************************
+!                                                                      !
+!  Apply 2D differential operator to compound variable for ensemble    !
+!                                                                      !
+!***********************************************************************
+(V,H,kmx)
+!-----------------------------------------------------------------------
+use mg_parameter, only: l_filt_g1
+implicit none
+
+integer(i_kind),intent(in):: kmx
+real(r_kind),dimension(kmx,1-hx:im+hx,1-hy:jm+hy),intent(inout):: V
+real(r_kind),dimension(kmx,1-hx:im+hx,1-hy:jm+hy),intent(inout):: H
+integer(i_kind):: i,j,l,k,imx,jmx
+!-----------------------------------------------------------------------
+
+if(l_filt_g1) then
+     do j=1,jm
+     do i=1,im
+       V(:,i,j)=a_diff_f(:,i,j)*V(:,i,j)                      
+     enddo
+     enddo
+endif
+
+if(l_hgen) then
+
+   imx = im
+   jmx = jm
+
+     do j=1,jmx
+     do i=1,imx
+        H(:,i,j)=a_diff_h(:,i,j)*H(:,i,j)                          
+     enddo
+     enddo
+
+endif
+
+
+!-----------------------------------------------------------------------
+                        endsubroutine weighting_ens
+
+!&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
                         subroutine weighting_loc_g3                     &
 !***********************************************************************
 !                                                                      !
@@ -847,6 +1010,8 @@ integer(i_kind):: i,j,iL,jL
 !
      W_AUX(:,:,:)= 0.
 
+!$OMP PARALLEL
+!$OMP PRIVATE (i,j,jL)
   do j=jm,2,-2
     jL = j/2
     do i=im,1,-1
@@ -890,6 +1055,7 @@ integer(i_kind):: i,j,iL,jL
      enddo
    enddo
 
+!$OMP END PARALLEL
 !-----------------------------------------------------------------------
                         endsubroutine adjoint
 
@@ -913,6 +1079,8 @@ real(r_kind), dimension(km,1:im,-1:jmL+2):: W_AUX
 integer(i_kind):: i,j,iL,jL
 !-----------------------------------------------------------------------
 
+!$OMP PARALLEL
+!$OMP PRIVATE (i,j,iL,jL)
 !
 ! 1)
 !
@@ -949,6 +1117,8 @@ integer(i_kind):: i,j,iL,jL
      enddo
    enddo
 
+
+!$OMP END PARALLEL
 !-----------------------------------------------------------------------
                         endsubroutine direct1
 

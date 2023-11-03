@@ -110,7 +110,7 @@ real(r_kind), allocatable, dimension(:,:):: PA
 !*** between analysis and filter grid
 !***
 
-      call allocate_mg_intstate(km,km_a)
+      call allocate_mg_intstate(km_all,km_a_all)
 
 !TEST->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 !      if(mype==0) then

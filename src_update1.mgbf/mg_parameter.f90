@@ -134,11 +134,18 @@ integer(i_kind):: km_e          ! total number of horizontal levels with ensembl
 integer(i_kind):: km_f          ! total number of horizontal levels for filtering 
 integer(i_kind):: km_a          ! total number of horizontal levels for analysis 
 integer(i_kind):: km_cor        ! number of dummy levels
+integer(i_kind):: km_all        ! total number of k levels of ensemble for filtering
+integer(i_kind):: km_a_all      ! total number of k levels of ensemble 
+integer(i_kind):: km2_all       ! total number of k horizontal levels of ensemble for filtering
+integer(i_kind):: km3_all       ! total number of k vertical levels of ensemble 
 logical :: l_loc                ! logical flag for localization
 logical :: l_loc_vertical       ! logical flag for vertical localization
+logical :: l_filt_g1            ! logical flag for filtering of generation one
+logical :: l_lin_vertical       ! logical flag for linear interpolation in vertcial
+logical :: l_quad_horizontal    ! logical flag for quadratic interpolation in horizontal
 integer(i_kind):: km            ! number of vertically stacked all variables (km=km2+lm*km3)
-!integer(i_kind):: lmf           ! number of vertical levels for filtering (generation one)
-!integer(i_kind):: lmh           ! number of vertical levels for filtering (high generations)
+!integer(i_kind):: lmf          ! number of vertical levels for filtering (generation one)
+!integer(i_kind):: lmh          ! number of vertical levels for filtering (high generations)
 
 integer(i_kind):: km_4
 integer(i_kind):: km_16
@@ -187,6 +194,9 @@ integer(i_kind):: g
                               ,n_ens                                    &
                               ,l_loc                                    &
                               ,l_loc_vertical                           &
+                              ,l_filt_g1                                &
+                              ,l_lin_vertical                           &
+                              ,l_quad_horizontal                        &
                               ,ldelta,lquart,lhelm                      &
                               ,gm_max                                   &
                               ,nm0,mm0                                  &
@@ -275,13 +285,15 @@ integer(i_kind):: g
 !
 
 
-      if(n_ens>1) then
-        km2=km2*n_ens
-        km3=km3*n_ens
-      endif
-
       km_a = km2+lm_a*km3
       km   = km2+lm  *km3
+
+      km_a_all = km_a * n_ens
+      km_all   = km   * n_ens
+
+      km2_all = km2 * n_ens
+      km3_all = km3 * n_ens
+
 
 
 !    if(l_loc) then

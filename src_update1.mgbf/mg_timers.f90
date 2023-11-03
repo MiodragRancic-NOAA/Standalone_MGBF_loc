@@ -137,9 +137,16 @@ contains
                                        output_tim%time_clock,           &
                                        total_tim%time_clock
     else if ( print_type == print_cpu ) then
-    write(buffer,"(I6,12(',',F10.4))") mype,                            &
+    write(buffer,"(I6,17(',',F10.4))") mype,                            &
                                        init_tim%time_cpu,               &
                                        an2filt_tim%time_cpu,            &
+                                       aintp_tim%time_cpu,              &
+!
+!                                       s2c_tim%time_cpu,                &
+                                       vadj_tim%time_cpu,               &
+!                                       c2s_tim%time_cpu,                &
+                                       a2f_tim%time_cpu,                &
+!
                                        vfiltT_tim%time_cpu,             &
                                        upsend_tim%time_cpu,             &
                                        hfiltT_tim%time_cpu,             &
@@ -148,6 +155,9 @@ contains
                                        dnsend_tim%time_cpu,             &
                                        vfilt_tim%time_cpu,              &
                                        filt2an_tim%time_cpu,            &
+
+                                       intp_tim%time_cpu,               &
+
                                        output_tim%time_cpu,             &
                                        total_tim%time_cpu
     end if
@@ -155,9 +165,16 @@ contains
     bufsize = LEN(TRIM(buffer)) + 1
     buffer(bufsize:bufsize) = NEW_LINE(' ')
 
-    write(header,"(A6,12(',',A10))") "mype",                            &
+    write(header,"(A6,17(',',A10))") "mype",                            &
                                      "init",                            &
                                      "an2filt",                         &
+                                     "aintp_tim",                       &
+!
+!                                     "s2c",                             &
+                                     "vadj",                            &
+!                                     "c2s",                             &
+                                     "a2f",                             &
+
                                      "vfiltT",                          &
                                      "upsend",                          &
                                      "hfiltT",                          &
@@ -166,6 +183,8 @@ contains
                                      "dnsend",                          &
                                      "vfilt",                           &
                                      "filt2an",                         &
+                                     "intp_tim",                        &
+!
                                      "output",                          &
                                      "total"
 

@@ -16,7 +16,9 @@ use mg_parameter, only: km2,km3,km
 use mg_mppstuff, only: mype,ierror
 use mg_mppstuff, only: l_hgen,my_hgen,finishMPI,barrierMPI
 use mg_generations, only: upsending_all,downsending_all,weighting_all
+use mg_generations, only: upsending_ens,downsending_ens,weighting_ens
 use mg_transfer, only: stack_to_composite,composite_to_stack
+use mg_transfer, only: S2C_ens,C2S_ens
 use mg_bocos, only: boco_2d,bocoT_2d
 use mg_bocos, only: boco_3d, bocoT_3d
 use mg_bocos, only: bocox,bocoy
@@ -36,7 +38,7 @@ private filtering_lin1
 private filtering_lin2
 private filtering_lin3
 private filtering_rad2_z
-private filtering_rad2_z_rf
+private filtering_rad2_ens
 private filtering_rad2_z_opt1   ! for preliminary testing
 private filtering_rad2_z_loc_g3
 private filtering_rad2_z_loc_g4
@@ -106,7 +108,7 @@ integer(i_kind),intent(in):: mg_filt
         case(10)
           call filtering_rad2_z_loc_g4
         case(11)
-          call filtering_rad2_z_rf
+          call filtering_rad2_ens
         case default
           call filtering_fast          
        end select
@@ -1395,12 +1397,12 @@ deallocate(HM2D)
                         endsubroutine filtering_rad2_z
 
 !&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-                        subroutine filtering_rad2_z_rf
+                        subroutine filtering_rad2_ens
 !***********************************************************************
 !                                                                      !
-! Multigrid filtering procedure 2:                                     !
+! Multigrid filtering procedure 11 for ensemble                        !
 !                                                                      !
-!     - Multiple of 2D and 3D variables                                !
+!     - Multiple of 3D variables                                      !
 !     - Apply vertical filter before and after horizontal
 !     - 1 upsending and downsending                                    !
 !     - Applicaton of Helmholtz differential operator                  !
@@ -1409,20 +1411,17 @@ deallocate(HM2D)
 !***********************************************************************
 use mg_intstate, only: pasp1,pasp2,ss1,ss2
 use mg_intstate, only: VALL,HALL
+use mg_parameter, only: km3_all,km_all,l_filt_g1
 implicit none
 
-real(r_kind), allocatable, dimension(:,:,:):: VM2D
-real(r_kind), allocatable, dimension(:,:,:):: HM2D
 real(r_kind), allocatable, dimension(:,:,:,:):: VM3D
 real(r_kind), allocatable, dimension(:,:,:,:):: HM3D
 
 integer(i_kind) L,i,j
 !-----------------------------------------------------------------------
 
-allocate(VM3D(km3,i0-hx:im+hx,j0-hy:jm+hy,lm))                  ; VM3D=0.
-allocate(VM2D(km2,i0-hx:im+hx,j0-hy:jm+hy   ))                  ; VM2D=0.
-allocate(HM3D(km3,i0-hx:im+hx,j0-hy:jm+hy,lm))                  ; HM3D=0.
-allocate(HM2D(km2,i0-hx:im+hx,j0-hy:jm+hy   ))                  ; HM2D=0.
+allocate(VM3D(km3_all,1-hx:im+hx,1-hy:jm+hy,lm))                  ; VM3D=0.
+allocate(HM3D(km3_all,1-hx:im+hx,1-hy:jm+hy,lm))                  ; HM3D=0.
 
 !----------------------------------------------------------------------
 
@@ -1431,9 +1430,11 @@ allocate(HM2D(km2,i0-hx:im+hx,j0-hy:jm+hy   ))                  ; HM2D=0.
 !***
 !*** Adjoint of beta filter in vertical direction
 !***
-      call stack_to_composite(VALL,VM2D,VM3D)
-      call sup_vrbeta1T(km3,hx,hy,hz,im,jm,lm,pasp1,ss1,VM3D)
-      call composite_to_stack(VM2D,VM3D,VALL)
+
+      call S2C_ens(VALL,VM3D,1-hx,im+hx,1-hy,jm+hy,lm,km,km_all)
+        call sup_vrbeta1T(km3_all,hx,hy,hz,im,jm,lm,pasp1,ss1,VM3D)
+      call C2S_ens(VM3D,VALL,1-hx,im+hx,1-hy,jm+hy,lm,km,km_all)
+
 
                                                  call etim(    vfiltT_tim)
 
@@ -1444,7 +1445,7 @@ allocate(HM2D(km2,i0-hx:im+hx,j0-hy:jm+hy   ))                  ; HM2D=0.
 !***
      
                                                  call btim( upsend_tim)
-       call upsending_all(VALL,HALL,lquart)
+       call upsending_ens(VALL,HALL,km_all)
                                                  call etim( upsend_tim)
 !----------------------------------------------------------------------
 
@@ -1459,9 +1460,11 @@ allocate(HM2D(km2,i0-hx:im+hx,j0-hy:jm+hy   ))                  ; HM2D=0.
 
 !fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 
-!T      call rbetaT(km,hx,i0,im,hy,j0,jm,pasp2,ss2,VALL(:,:,:))
+  if(l_filt_g1) then
+      call rbetaT(km_all,hx,1,im,hy,1,jm,pasp2,ss2,VALL(:,:,:))
+  endif
   if(l_hgen)  then
-      call rbetaT(km,hx,i0,im,hy,j0,jm,pasp2,ss2,HALL(:,:,:))
+      call rbetaT(km_all,hx,1,im,hy,1,jm,pasp2,ss2,HALL(:,:,:))
   endif
 
 
@@ -1469,8 +1472,10 @@ allocate(HM2D(km2,i0-hx:im+hx,j0-hy:jm+hy   ))                  ; HM2D=0.
 
 
                                                  call btim(     bocoT_tim)
-!T        call bocoT_2d(VALL,km,im,jm,hx,hy)
-        call bocoT_2d(HALL,km,im,jm,hx,hy,Fimax,Fjmax,2,gm)
+  if(l_filt_g1) then
+        call bocoT_2d(VALL,km_all,im,jm,hx,hy)
+  endif
+        call bocoT_2d(HALL,km_all,im,jm,hx,hy,Fimax,Fjmax,2,gm)
 
                                                  call etim(     bocoT_tim)
 
@@ -1482,7 +1487,7 @@ allocate(HM2D(km2,i0-hx:im+hx,j0-hy:jm+hy   ))                  ; HM2D=0.
 
                                                 call btim( weight_tim)
 
-      call weighting_all(VALL,HALL,lhelm)
+      call weighting_ens(VALL,HALL,km_all)
 
 
                                                 call etim( weight_tim)
@@ -1495,8 +1500,10 @@ allocate(HM2D(km2,i0-hx:im+hx,j0-hy:jm+hy   ))                  ; HM2D=0.
 
                                                  call btim(     boco_tim)
 
-!      call boco_2d(VALL,km,im,jm,hx,hy)
-      call boco_2d(HALL,km,im,jm,hx,hy,Fimax,Fjmax,2,gm)
+  if(l_filt_g1) then
+      call boco_2d(VALL,km_all,im,jm,hx,hy)
+  endif
+      call boco_2d(HALL,km_all,im,jm,hx,hy,Fimax,Fjmax,2,gm)
 
                                                  call etim(     boco_tim)
 
@@ -1506,9 +1513,11 @@ allocate(HM2D(km2,i0-hx:im+hx,j0-hy:jm+hy   ))                  ; HM2D=0.
 ! Filtering
 !
 
-!T      call rbeta(km,hx,i0,im,hy,j0,jm,pasp2,ss2,VALL(:,:,:))
+  if(l_filt_g1) then
+      call rbeta(km_all,hx,1,im,hy,1,jm,pasp2,ss2,VALL(:,:,:))
+  endif
   if(l_hgen)  then
-      call rbeta(km,hx,i0,im,hy,j0,jm,pasp2,ss2,HALL(:,:,:))
+      call rbeta(km_all,hx,1,im,hy,1,jm,pasp2,ss2,HALL(:,:,:))
   endif
 
 
@@ -1522,29 +1531,28 @@ allocate(HM2D(km2,i0-hx:im+hx,j0-hy:jm+hy   ))                  ; HM2D=0.
 !***
 
                                                  call btim(   dnsend_tim)
-       call downsending_all(HALL,VALL,lquart)
+       call downsending_ens(HALL,VALL,km_all)
 
                                                  call etim(   dnsend_tim)
 
-                                                 call btim(    vfilt_tim)
 !***
 !*** Apply beta filter in vertical direction
 !***
-      call stack_to_composite(VALL,VM2D,VM3D)
-      call sup_vrbeta1(km3,hx,hy,hz,im,jm,lm,pasp1,ss1,VM3D)
-      call composite_to_stack(VM2D,VM3D,VALL)
+                                                 call btim(    vfilt_tim)
+
+      call S2C_ens(VALL,VM3D,1-hx,im+hx,1-hy,jm+hy,lm,km,km_all)
+        call sup_vrbeta1(km3_all,hx,hy,hz,im,jm,lm,pasp1,ss1,VM3D)
+      call C2S_ens(VM3D,VALL,1-hx,im+hx,1-hy,jm+hy,lm,km,km_all)
+
                                                  call etim(    vfilt_tim)
 
 
 
-
 deallocate(VM3D) 
-deallocate(VM2D)
 deallocate(HM3D)
-deallocate(HM2D)
 
 !-----------------------------------------------------------------------
-                        endsubroutine filtering_rad2_z_rf
+                        endsubroutine filtering_rad2_ens
 
 !&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
                         subroutine filtering_rad2_z_opt1
@@ -1702,16 +1710,13 @@ deallocate(HM2D)
 !***********************************************************************
 use mg_intstate, only: pasp1,pasp2,ss1,ss2
 use mg_intstate, only: VALL,HALL
-use mg_transfer, only: stack_to_composite_loc
-use mg_transfer, only: composite_to_stack_loc
 use mg_bocos, only: boco_2d_loc,bocoT_2d_loc
 use mg_generations, only: upsending_loc,downsending_loc,weighting_loc
-use mg_parameter, only: l_loc_vertical,n_ens
+use mg_parameter, only: l_loc_vertical,n_ens,km_all,km3_all
 use mg_parameter, only: km_4,km_16
 implicit none
 
 
-real(r_kind), allocatable, dimension(:,:,:):: VM2D
 real(r_kind), allocatable, dimension(:,:,:,:):: VM3D
 real(r_kind), allocatable, dimension(:,:,:):: H04
 real(r_kind), allocatable, dimension(:,:,:):: H16
@@ -1719,8 +1724,7 @@ real(r_kind), allocatable, dimension(:,:,:):: H16
 integer(i_kind) L,i,j
 !-----------------------------------------------------------------------
 
-allocate(VM3D(km3*n_ens,1-hx:im+hx,1-hy:jm+hy,lm))            ; VM3D=0.
-allocate(VM2D(km2*n_ens,1-hx:im+hx,1-hy:jm+hy   ))            ; VM2D=0.
+allocate(VM3D(n_ens*km3,1-hx:im+hx,1-hy:jm+hy,lm))            ; VM3D=0.
 
 allocate(H04(km_4 ,1-hx:im+hx,1-hy:jm+hy   ))                 ; H04=0.
 allocate(H16(km_16,1-hx:im+hx,1-hy:jm+hy   ))                 ; H16=0.
@@ -1731,9 +1735,9 @@ allocate(H16(km_16,1-hx:im+hx,1-hy:jm+hy   ))                 ; H16=0.
 !***
 
    if(l_loc_vertical) then
-      call stack_to_composite_loc(VALL,VM2D,VM3D)
-      call sup_vrbeta1T(km3*n_ens,hx,hy,hz,im,jm,lm,pasp1,ss1,VM3D)
-      call composite_to_stack_loc(VM2D,VM3D,VALL)
+      call S2C_ens(VALL,VM3D,1-hx,im+hx,1-hy,jm+hy,lm,km,km_all)
+        call sup_vrbeta1T(km3_all,hx,hy,hz,im,jm,lm,pasp1,ss1,VM3D)
+      call C2S_ens(VM3D,VALL,1-hx,im+hx,1-hy,jm+hy,lm,km,km_all)
    endif
 
 
@@ -1839,14 +1843,13 @@ allocate(H16(km_16,1-hx:im+hx,1-hy:jm+hy   ))                 ; H16=0.
 !*** Apply beta filter in vertical direction   << Need modification >>>
 !***
    if(l_loc_vertical) then
-      call stack_to_composite_loc(VALL,VM2D,VM3D)
-      call sup_vrbeta1(km3*n_ens,hx,hy,hz,im,jm,lm,pasp1,ss1,VM3D)
-      call composite_to_stack_loc(VM2D,VM3D,VALL)
+      call S2C_ens(VALL,VM3D,1-hx,im+hx,1-hy,jm+hy,lm,km,km_all)
+      call sup_vrbeta1(km3_all,hx,hy,hz,im,jm,lm,pasp1,ss1,VM3D)
+      call C2S_ens(VM3D,VALL,1-hx,im+hx,1-hy,jm+hy,lm,km,km_all)
    endif
 
 
 deallocate(VM3D) 
-deallocate(VM2D)
 
 deallocate(H04)
 deallocate(H16)
@@ -1870,16 +1873,13 @@ deallocate(H16)
 !***********************************************************************
 use mg_intstate, only: pasp1,pasp2,ss1,ss2
 use mg_intstate, only: VALL,HALL
-use mg_transfer, only: stack_to_composite_loc
-use mg_transfer, only: composite_to_stack_loc
 use mg_bocos, only: boco_2d_loc,bocoT_2d_loc
 use mg_generations, only: upsending_loc,downsending_loc,weighting_loc
-use mg_parameter, only: l_loc_vertical,n_ens
+use mg_parameter, only: l_loc_vertical,n_ens,km_all,km3_all
 use mg_parameter, only: km_4,km_16,km_64
 implicit none
 
 
-real(r_kind), allocatable, dimension(:,:,:):: VM2D
 real(r_kind), allocatable, dimension(:,:,:,:):: VM3D
 real(r_kind), allocatable, dimension(:,:,:):: H04
 real(r_kind), allocatable, dimension(:,:,:):: H16
@@ -1889,7 +1889,6 @@ integer(i_kind) L,i,j
 !-----------------------------------------------------------------------
 
 allocate(VM3D(km3*n_ens,1-hx:im+hx,1-hy:jm+hy,lm))            ; VM3D=0.
-allocate(VM2D(km2*n_ens,1-hx:im+hx,1-hy:jm+hy   ))            ; VM2D=0.
 
 allocate(H04(km_4 ,1-hx:im+hx,1-hy:jm+hy   ))                 ; H04=0.
 allocate(H16(km_16,1-hx:im+hx,1-hy:jm+hy   ))                 ; H16=0.
@@ -1901,9 +1900,9 @@ allocate(H64(km_64,1-hx:im+hx,1-hy:jm+hy   ))                 ; H64=0.
 !***
 
    if(l_loc_vertical) then
-      call stack_to_composite_loc(VALL,VM2D,VM3D)
-      call sup_vrbeta1T(km3*n_ens,hx,hy,hz,im,jm,lm,pasp1,ss1,VM3D)
-      call composite_to_stack_loc(VM2D,VM3D,VALL)
+      call S2C_ens(VALL,VM3D,1-hx,im+hx,1-hy,jm+hy,lm,km,km_all)
+        call sup_vrbeta1T(km3_all,hx,hy,hz,im,jm,lm,pasp1,ss1,VM3D)
+      call C2S_ens(VM3D,VALL,1-hx,im+hx,1-hy,jm+hy,lm,km,km_all)
    endif
 
 
@@ -2001,15 +2000,15 @@ allocate(H64(km_64,1-hx:im+hx,1-hy:jm+hy   ))                 ; H64=0.
 !***
 !*** Apply beta filter in vertical direction   << Need modification >>>
 !***
+
    if(l_loc_vertical) then
-      call stack_to_composite_loc(VALL,VM2D,VM3D)
-      call sup_vrbeta1(km3*n_ens,hx,hy,hz,im,jm,lm,pasp1,ss1,VM3D)
-      call composite_to_stack_loc(VM2D,VM3D,VALL)
+      call S2C_ens(VALL,VM3D,1-hx,im+hx,1-hy,jm+hy,lm,km,km_all)
+      call sup_vrbeta1(km3_all,hx,hy,hz,im,jm,lm,pasp1,ss1,VM3D)
+      call C2S_ens(VM3D,VALL,1-hx,im+hx,1-hy,jm+hy,lm,km,km_all)
    endif
 
 
 deallocate(VM3D) 
-deallocate(VM2D)
 
 deallocate(H04)
 deallocate(H16)
@@ -2040,8 +2039,8 @@ integer(i_kind):: i,j,L
 
 !----------------------------------------------------------------------
 
-        do j=j0,jm
-        do i=i0,im
+        do j=1,jm
+        do i=1,im
           do L=1,Lm
             W(:,L)=V(:,i,j,L)
           end do

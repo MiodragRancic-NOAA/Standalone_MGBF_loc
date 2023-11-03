@@ -13,7 +13,6 @@ use kinds, only: r_kind,i_kind
 use jp_pkind2, only: fpi
 !GSI use mpimod, only: mype
 use mg_mppstuff, only: mype
-use mg_parameter, only: n0,m0,i0,j0
 use mg_parameter, only: im,jm,nh,hx,hy,pasp01,pasp02,pasp03
 use mg_parameter, only: lm,hz,p,nm,mm,ib,jb,nb,mb
 use mg_parameter, only: l_loc,lm_a
@@ -33,7 +32,7 @@ real(r_kind), dimension(:,:,:), pointer :: V
 !
 ! Composite control variable on first generation o filter grid
 !
-real(r_kind), allocatable,dimension(:,:,:):: VALL
+real(r_kind), target,allocatable,dimension(:,:,:):: VALL
 real(r_kind), allocatable,dimension(:,:,:):: HALL
 !
 ! Composite control variable on high generations of filter grid
@@ -97,17 +96,22 @@ integer(fpi), allocatable,dimension(:,:,:,:):: qcols
 ! Composite stacked variable
 !
 
-real(r_kind), allocatable,dimension(:,:,:):: WORKA
+real(r_kind), target,allocatable,dimension(:,:,:):: WORKA
 real(r_kind), allocatable,dimension(:,:,:):: WORK 
 
 
 integer(i_kind),allocatable,dimension(:):: iref,jref
+integer(i_kind),allocatable,dimension(:):: irefq,jrefq
+
 integer(i_kind),allocatable,dimension(:):: Lref,Lref_h
 real(r_kind),allocatable,dimension(:):: cvf1,cvf2,cvf3,cvf4
 real(r_kind),allocatable,dimension(:):: cvh1,cvh2,cvh3,cvh4
 
 real(r_kind),allocatable,dimension(:):: cx0,cx1,cx2,cx3
 real(r_kind),allocatable,dimension(:):: cy0,cy1,cy2,cy3
+
+real(r_kind),allocatable,dimension(:):: qx0,qx1,qx2
+real(r_kind),allocatable,dimension(:):: qy0,qy1,qy2
 
 real(r_kind),allocatable,dimension(:):: p_coef,q_coef
 real(r_kind),allocatable,dimension(:):: a_coef,b_coef
@@ -122,7 +126,7 @@ real(r_kind),allocatable,dimension(:,:):: cf00,cf01,cf02,cf03           &
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 !&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-                        subroutine allocate_mg_intstate(km,km_a)
+                        subroutine allocate_mg_intstate(km_all,km_a_all)
 !***********************************************************************
 !                                                                      !
 ! Allocate internal state variables                                    !
@@ -130,63 +134,63 @@ real(r_kind),allocatable,dimension(:,:):: cf00,cf01,cf02,cf03           &
 !***********************************************************************
 implicit none
 
-integer(i_kind),intent(in):: km,km_a
+integer(i_kind),intent(in):: km_all,km_a_all
 
-integer(i_kind) :: km_4,km_16,km_64
+integer(i_kind) :: km_all_4,km_all_16,km_all_64
 
 if(l_loc) then
-   km_4  = km/4
-   km_16 = km/16
-   km_64 = km/64
-     allocate(w1_loc(km   ,1-hx:im+hx,1-hy:jm+hy))         ; w1_loc=0. 
-     allocate(w2_loc(km_4 ,1-hx:im+hx,1-hy:jm+hy))         ; w2_loc=0. 
-     allocate(w3_loc(km_16,1-hx:im+hx,1-hy:jm+hy))         ; w3_loc=0. 
-     allocate(w4_loc(km_64,1-hx:im+hx,1-hy:jm+hy))         ; w4_loc=0. 
+   km_all_4  = km_all/4
+   km_all_16 = km_all/16
+   km_all_64 = km_all/64
+     allocate(w1_loc(km_all   ,1-hx:im+hx,1-hy:jm+hy))         ; w1_loc=0. 
+     allocate(w2_loc(km_all_4 ,1-hx:im+hx,1-hy:jm+hy))         ; w2_loc=0. 
+     allocate(w3_loc(km_all_16,1-hx:im+hx,1-hy:jm+hy))         ; w3_loc=0. 
+     allocate(w4_loc(km_all_64,1-hx:im+hx,1-hy:jm+hy))         ; w4_loc=0. 
 endif
 
 
-allocate(V(i0-hx:im+hx,j0-hy:jm+hy,lm))                      ; V=0.
-allocate(VALL(km,i0-hx:im+hx,j0-hy:jm+hy))                  ; VALL=0.
-allocate(HALL(km,i0-hx:im+hx,j0-hy:jm+hy))                  ; HALL=0.
+allocate(V(1-hx:im+hx,1-hy:jm+hy,lm))                      ; V=0.
+allocate(VALL(km_all,1-hx:im+hx,1-hy:jm+hy))                  ; VALL=0.
+allocate(HALL(km_all,1-hx:im+hx,1-hy:jm+hy))                  ; HALL=0.
 
 
-allocate(a_diff_f(km,i0-hx:im+hx,j0-hy:jm+hy))             ; a_diff_f=0. 
-allocate(a_diff_h(km,i0-hx:im+hx,j0-hy:jm+hy))             ; a_diff_h=0. 
-allocate(b_diff_f(km,i0-hx:im+hx,j0-hy:jm+hy))             ; b_diff_f=0. 
-allocate(b_diff_h(km,i0-hx:im+hx,j0-hy:jm+hy))             ; b_diff_h=0. 
+allocate(a_diff_f(km_all,1-hx:im+hx,1-hy:jm+hy))             ; a_diff_f=0. 
+allocate(a_diff_h(km_all,1-hx:im+hx,1-hy:jm+hy))             ; a_diff_h=0. 
+allocate(b_diff_f(km_all,1-hx:im+hx,1-hy:jm+hy))             ; b_diff_f=0. 
+allocate(b_diff_h(km_all,1-hx:im+hx,1-hy:jm+hy))             ; b_diff_h=0. 
 
-allocate(p_eps(i0-hx:im+hx,j0-hy:jm+hy))                            ; p_eps=0.
-allocate(p_del(i0-hx:im+hx,j0-hy:jm+hy))                            ; p_del=0.
-allocate(p_sig(i0-hx:im+hx,j0-hy:jm+hy))                            ; p_sig=0.
-allocate(p_rho(i0-hx:im+hx,j0-hy:jm+hy))                            ; p_rho=0.
+allocate(p_eps(1-hx:im+hx,1-hy:jm+hy))                            ; p_eps=0.
+allocate(p_del(1-hx:im+hx,1-hy:jm+hy))                            ; p_del=0.
+allocate(p_sig(1-hx:im+hx,1-hy:jm+hy))                            ; p_sig=0.
+allocate(p_rho(1-hx:im+hx,1-hy:jm+hy))                            ; p_rho=0.
 
 allocate(paspx(1,1,1:im))                                          ; paspx=0.
 allocate(paspy(1,1,1:jm))                                          ; paspy=0.
 
 allocate(pasp1(1,1,1:lm))                                           ; pasp1=0.
-allocate(pasp2(2,2,i0:im,j0:jm))                                    ; pasp2=0.
-allocate(pasp3(3,3,i0:im,j0:jm,1:lm))                               ; pasp3=0.
+allocate(pasp2(2,2,1:im,1:jm))                                    ; pasp2=0.
+allocate(pasp3(3,3,1:im,1:jm,1:lm))                               ; pasp3=0.
 
-allocate(vpasp2(0:2,i0:im,j0:jm))                                   ; vpasp2=0.
-allocate(hss2(i0:im,j0:jm,1:3))                                     ; hss2= 0.
+allocate(vpasp2(0:2,1:im,1:jm))                                   ; vpasp2=0.
+allocate(hss2(1:im,1:jm,1:3))                                     ; hss2= 0.
 
-allocate(vpasp3(1:6,i0:im,j0:jm,1:lm))                              ; vpasp3= 0.
-allocate(hss3(i0:im,j0:jm,1:lm,1:6))                                ; hss3= 0.
+allocate(vpasp3(1:6,1:im,1:jm,1:lm))                              ; vpasp3= 0.
+allocate(hss3(1:im,1:jm,1:lm,1:6))                                ; hss3= 0.
 
 allocate(ssx(1:im))                                             ; ssx=0.
 allocate(ssy(1:jm))                                             ; ssy=0.
 allocate(ss1(1:lm))                                             ; ss1=0.
-allocate(ss2(i0:im,j0:jm))                                        ; ss2=0.
-allocate(ss3(i0:im,j0:jm,1:lm))                                   ; ss3=0.
+allocate(ss2(1:im,1:jm))                                        ; ss2=0.
+allocate(ss3(1:im,1:jm,1:lm))                                   ; ss3=0.
 
-allocate(dixs(i0:im,j0:jm,3))                                     ; dixs=0
-allocate(diys(i0:im,j0:jm,3))                                     ; diys=0
+allocate(dixs(1:im,1:jm,3))                                     ; dixs=0
+allocate(diys(1:im,1:jm,3))                                     ; diys=0
 
-allocate(dixs3(i0:im,j0:jm,1:lm,6))                               ; dixs3=0
-allocate(diys3(i0:im,j0:jm,1:lm,6))                               ; diys3=0
-allocate(dizs3(i0:im,j0:jm,1:lm,6))                               ; dizs3=0
+allocate(dixs3(1:im,1:jm,1:lm,6))                               ; dixs3=0
+allocate(diys3(1:im,1:jm,1:lm,6))                               ; diys3=0
+allocate(dizs3(1:im,1:jm,1:lm,6))                               ; dizs3=0
 
-allocate(qcols(0:7,i0:im,j0:jm,1:lm))                             ; qcols=0
+allocate(qcols(0:7,1:im,1:jm,1:lm))                             ; qcols=0
 
 !
 ! In stnadalone version
@@ -199,25 +203,37 @@ allocate(qcols(0:7,i0:im,j0:jm,1:lm))                             ; qcols=0
 !
 
 !
-allocate(WORKA(km_a,n0:nm,m0:mm))                        ; WORKA=0.
-allocate(WORK (km  ,n0:nm,m0:mm))                        ; WORK =0.
+allocate(WORKA(km_a_all,1:nm,1:mm))                        ; WORKA=0.
+allocate(WORK (km_all  ,1:nm,1:mm))                        ; WORK =0.
 
 !
 ! for re-decomposition
 !
 
-allocate(iref(n0:nm))                                     ; iref=0
-allocate(jref(m0:mm))                                     ; jref=0
+allocate(iref(1:nm))                                     ; iref=0
+allocate(jref(1:mm))                                     ; jref=0
 
-allocate(cx0(n0:nm))                                      ; cx0=0.
-allocate(cx1(n0:nm))                                      ; cx1=0.
-allocate(cx2(n0:nm))                                      ; cx2=0.
-allocate(cx3(n0:nm))                                      ; cx3=0.
+allocate(irefq(1:nm))                                    ; irefq=0
+allocate(jrefq(1:mm))                                    ; jrefq=0
 
-allocate(cy0(m0:mm))                                      ; cy0=0.
-allocate(cy1(m0:mm))                                      ; cy1=0.
-allocate(cy2(m0:mm))                                      ; cy2=0.
-allocate(cy3(m0:mm))                                      ; cy3=0.
+allocate(cx0(1:nm))                                      ; cx0=0.
+allocate(cx1(1:nm))                                      ; cx1=0.
+allocate(cx2(1:nm))                                      ; cx2=0.
+allocate(cx3(1:nm))                                      ; cx3=0.
+
+allocate(cy0(1:mm))                                      ; cy0=0.
+allocate(cy1(1:mm))                                      ; cy1=0.
+allocate(cy2(1:mm))                                      ; cy2=0.
+allocate(cy3(1:mm))                                      ; cy3=0.
+
+allocate(qx0(1:nm))                                      ; qx0=0.
+allocate(qx1(1:nm))                                      ; qx1=0.
+allocate(qx2(1:nm))                                      ; qx2=0.
+
+allocate(qy0(1:mm))                                      ; qy0=0.
+allocate(qy1(1:mm))                                      ; cy1=0.
+allocate(qy2(1:mm))                                      ; qy2=0.
+
 
 !TEST
 !       call finishMPI
@@ -230,22 +246,22 @@ allocate(a_coef(3))                                      ; a_coef=0.
 allocate(b_coef(3))                                      ; b_coef=0.
 
 
-allocate(cf00(n0:nm,m0:mm))                            ; cf00=0.
-allocate(cf01(n0:nm,m0:mm))                            ; cf01=0.
-allocate(cf02(n0:nm,m0:mm))                            ; cf02=0.
-allocate(cf03(n0:nm,m0:mm))                            ; cf03=0.
-allocate(cf10(n0:nm,m0:mm))                            ; cf10=0.
-allocate(cf11(n0:nm,m0:mm))                            ; cf11=0.
-allocate(cf12(n0:nm,m0:mm))                            ; cf12=0.
-allocate(cf13(n0:nm,m0:mm))                            ; cf13=0.
-allocate(cf20(n0:nm,m0:mm))                            ; cf20=0.
-allocate(cf21(n0:nm,m0:mm))                            ; cf21=0.
-allocate(cf22(n0:nm,m0:mm))                            ; cf22=0.
-allocate(cf23(n0:nm,m0:mm))                            ; cf23=0.
-allocate(cf30(n0:nm,m0:mm))                            ; cf30=0.
-allocate(cf31(n0:nm,m0:mm))                            ; cf31=0.
-allocate(cf32(n0:nm,m0:mm))                            ; cf32=0.
-allocate(cf33(n0:nm,m0:mm))                            ; cf33=0.
+allocate(cf00(1:nm,1:mm))                            ; cf00=0.
+allocate(cf01(1:nm,1:mm))                            ; cf01=0.
+allocate(cf02(1:nm,1:mm))                            ; cf02=0.
+allocate(cf03(1:nm,1:mm))                            ; cf03=0.
+allocate(cf10(1:nm,1:mm))                            ; cf10=0.
+allocate(cf11(1:nm,1:mm))                            ; cf11=0.
+allocate(cf12(1:nm,1:mm))                            ; cf12=0.
+allocate(cf13(1:nm,1:mm))                            ; cf13=0.
+allocate(cf20(1:nm,1:mm))                            ; cf20=0.
+allocate(cf21(1:nm,1:mm))                            ; cf21=0.
+allocate(cf22(1:nm,1:mm))                            ; cf22=0.
+allocate(cf23(1:nm,1:mm))                            ; cf23=0.
+allocate(cf30(1:nm,1:mm))                            ; cf30=0.
+allocate(cf31(1:nm,1:mm))                            ; cf31=0.
+allocate(cf32(1:nm,1:mm))                            ; cf32=0.
+allocate(cf33(1:nm,1:mm))                            ; cf33=0.
 
 allocate(Lref(1:lm_a))                                  ; Lref=0
 allocate(Lref_h(1:lm))                                 ; Lref_h=0
@@ -324,8 +340,8 @@ real(r_kind):: gen_fac
             paspy(1,1,j)=pasp02
           enddo  
 
-          do j=i0,jm
-          do i=j0,im
+          do j=1,jm
+          do i=1,im
             pasp2(1,1,i,j)=pasp02*(1.+p_del(i,j))
             pasp2(2,2,i,j)=pasp02*(1.-p_del(i,j))
             pasp2(1,2,i,j)=pasp02*p_eps(i,j)     
@@ -334,8 +350,8 @@ real(r_kind):: gen_fac
           end do
 
         do L=1,lm
-          do j=i0,jm
-          do i=j0,im
+          do j=1,jm
+          do i=1,im
             pasp3(1,1,i,j,l)=pasp03*(1+p_del(i,j))
             pasp3(2,2,i,j,l)=pasp03
             pasp3(3,3,i,j,l)=pasp03*(1-p_del(i,j))
@@ -351,15 +367,15 @@ real(r_kind):: gen_fac
 
 
         call cholaspect(1,lm,pasp1)
-        call cholaspect(i0,im,j0,jm,pasp2)
-        call cholaspect(i0,im,j0,jm,1,lm,pasp3)
+        call cholaspect(1,im,1,jm,pasp2)
+        call cholaspect(1,im,1,jm,1,lm,pasp3)
 
 
         call getlinesum(hx,1,im,paspx,ssx)
         call getlinesum(hy,1,jm,paspy,ssy)
         call getlinesum(hz,1,lm,pasp1,ss1)
-        call getlinesum(hx,i0,im,hy,j0,jm,pasp2,ss2)
-        call getlinesum(hx,i0,im,hy,j0,jm,hz,1,lm,pasp3,ss3)
+        call getlinesum(hx,1,im,hy,1,jm,pasp2,ss2)
+        call getlinesum(hx,1,im,hy,1,jm,hz,1,lm,pasp3,ss3)
 !-----------------------------------------------------------------------
                         endsubroutine def_mg_weights
 
@@ -374,15 +390,15 @@ integer(i_kind):: i,j,L,icol
 logical:: ff
 !-----------------------------------------------------------------------
 
-  do j=j0,jm
-  do i=i0,im
+  do j=1,jm
+  do i=1,im
     call t22_to_3(pasp2(:,:,i,j),vpasp2(:,i,j))
   enddo
   enddo
 
   do l=1,lm
-  do j=j0,jm
-  do i=i0,im
+  do j=1,jm
+  do i=1,im
     call t33_to_6(pasp3(:,:,i,j,l),vpasp3(:,i,j,l))
   enddo
   enddo
@@ -392,14 +408,14 @@ logical:: ff
 
   call inimomtab(p,nh,ff)
 
-  call tritform(i0,im,i0,jm,vpasp2, dixs,diys, ff)
+  call tritform(1,im,1,jm,vpasp2, dixs,diys, ff)
 
   do icol=1,3
     hss2(:,:,icol)=vpasp2(icol-1,:,:)
   enddo  
 
 
-  call hextform(i0,im,j0,jm,1,lm,vpasp3,qcols,dixs3,diys3,dizs3, ff)
+  call hextform(1,im,1,jm,1,lm,vpasp3,qcols,dixs3,diys3,dizs3, ff)
 
 
   do icol=1,6
@@ -439,6 +455,7 @@ deallocate(WORK )
 ! for re-decomposition
 !
 deallocate(iref,jref)
+deallocate(irefq,jrefq)
 
 deallocate(cf00,cf01,cf02,cf03,cf10,cf11,cf12,cf13)
 deallocate(cf20,cf21,cf22,cf23,cf30,cf31,cf32,cf33)
@@ -451,6 +468,9 @@ deallocate(cvh1,cvh2,cvh3,cvh4)
 
 deallocate(cx0,cx1,cx2,cx3)
 deallocate(cy0,cy1,cy2,cy3)
+
+deallocate(qx0,qx1,qx2)
+deallocate(qy0,qy1,qy2)
 
 deallocate(p_coef,q_coef)
 deallocate(a_coef,b_coef)

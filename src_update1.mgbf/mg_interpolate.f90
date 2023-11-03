@@ -16,6 +16,9 @@ use mg_parameter, only: xa0,ya0,xf0,yf0,dxa,dxf,dya,dyf                 &
 use mg_intstate, only: iref,jref                                        &
                       ,cx0,cx1,cx2,cx3                                  &
                       ,cy0,cy1,cy2,cy3                                  
+use mg_intstate, only: irefq,jrefq                                      &
+                      ,qx0,qx1,qx2                                      &
+                      ,qy0,qy1,qy2
 use mg_intstate, only: p_coef,q_coef
 use mg_intstate, only: a_coef,b_coef
 
@@ -25,6 +28,12 @@ use mg_mppstuff, only: finishMPI
 implicit none
 
 public lsqr_mg_coef
+
+public l_vertical_direct_spec
+public l_vertical_adjoint_spec
+
+public l_vertical_direct_spec2
+public l_vertical_adjoint_spec2
 
 public lwq_vertical_coef
 public lwq_vertical_direct
@@ -37,6 +46,10 @@ public def_offset_coef
 
 public lsqr_direct_offset
 public lsqr_adjoint_offset
+
+public quad_direct_offset
+public quad_adjoint_offset
+
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
                         contains
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -97,6 +110,8 @@ real(r_kind) y1y,y2y,y3y,y4y
 real(r_kind) ry2y1,ry3y1,ry4y1,ry3y2,ry4y2,ry4y3
 real(r_kind) cfl1,cfl2,cfl3,cll
 real(r_kind) cfr1,cfr2,cfr3,crr
+real(r_kind) x1_x,x2_x,x3_x
+real(r_kind) y1_y,y2_y,y3_y
 !-----------------------------------------------------------------------
 !
 ! Initialize
@@ -125,15 +140,26 @@ real(r_kind) cfr1,cfr2,cfr3,crr
      do i=1-ib,im+ib-1
        if( xa(n)< xf(i)) then
          iref(n)=i-2
+         irefq(n)=i-1
          exit
        endif
      enddo
    enddo
 
+!TEST
+!   do n=1,nm
+!     if(mype==0) then
+!       print *,'irefq(n)=',irefq
+!     endif
+!   enddo
+!     call finishMPI
+!TEST
+
    do m=1,mm
      do j=1-jb,jm+jb-1
        if(ya(m) < yf(j)) then
          jref(m)=j-2
+         jrefq(m)=j-1
          exit
        endif
      enddo
@@ -202,6 +228,42 @@ real(r_kind) cfr1,cfr2,cfr3,crr
        cy3(m)=CFR3*CRR
    enddo
 
+!
+! Quadratic interpolations
+!
+   do n=1,nm
+     i=irefq(n)
+     x1=xf(i)
+     x2=xf(i+1)
+     x3=xf(i+2)
+     x = xa(n)
+       x1_x = x1-x   
+       x2_x = x2-x   
+       x3_x = x3-x   
+       rx2x1 = 1./(x2-x1)
+       rx3x1 = 1./(x3-x1)
+       rx3x2 = 1./(x3-x2)
+       qx0(n) = x2_x*x3_x*rx2x1*rx3x1
+       qx1(n) =-x1_x*x3_x*rx2x1*rx3x2
+       qx2(n) = x1_x*x2_x*rx3x1*rx3x2
+   enddo
+
+   do m=1,mm
+     i=jrefq(m)
+     y1=yf(i)
+     y2=yf(i+1)
+     y3=yf(i+2)
+     y = ya(m)
+       y1_y = y1-y   
+       y2_y = y2-y   
+       y3_y = y3-y   
+       ry2y1 = 1./(y2-y1)
+       ry3y1 = 1./(y3-y1)
+       ry3y2 = 1./(y3-y2)
+       qy0(m) = y2_y*y3_y*ry2y1*ry3y1
+       qy1(m) =-y1_y*y3_y*ry2y1*ry3y2
+       qy2(m) = y1_y*y2_y*ry3y1*ry3y2
+   enddo
  
 !-----------------------------------------------------------------------
                         endsubroutine lsqr_mg_coef
@@ -210,7 +272,7 @@ real(r_kind) cfr1,cfr2,cfr3,crr
                         subroutine lwq_vertical_coef                    &
 !***********************************************************************
 !                                                                      !
-!  Prepare coeficients for vetical mapping between:                    !
+!  Prepare coeficients for vertical mapping between:                   !
 !  analysis grid vertical resolution (nm) and                          !
 !  generation one of filter grid vertical resoluition (im)             !
 !                                                                      !
@@ -386,7 +448,8 @@ real(r_kind), dimension(1:km3,imin:imax,jmin:jmax,1:nm), intent(in):: W
 real(r_kind), dimension(1:km3,imin:imax,jmin:jmax,1:km), intent(out):: F
 integer(i_kind):: k,n
 !-----------------------------------------------------------------------
-
+!$OMP PARALLEL
+!$OMP PRIVATE(n,k)
   F = 0.
 do n=2,nm-1
   k = kref(n)
@@ -411,6 +474,7 @@ enddo
     F(:,:,:,1 )=F(:,:,:,1 )+W(:,:,:,1 )
     F(:,:,:,km)=F(:,:,:,km)+W(:,:,:,nm)
 
+!$OMP END PARALLEL
 !-----------------------------------------------------------------------
                         endsubroutine lwq_vertical_adjoint_spec
 
@@ -435,6 +499,9 @@ real(r_kind), dimension(1:km3,imin:imax,jmin:jmax,1:nm), intent(out):: W
 integer(i_kind):: k,n
 !-----------------------------------------------------------------------
 
+!$OMP PARALLEL
+!$OMP PRIVATE(n,k)
+
 do n=2,nm-1
   k = kref(n)
   if( k==1 ) then
@@ -452,8 +519,88 @@ enddo
     W(:,:,:,1 )=F(:,:,:,1 )
     W(:,:,:,nm)=F(:,:,:,km)
     
+!$OMP END PARALLEL
 !-----------------------------------------------------------------------
                         endsubroutine lwq_vertical_direct_spec
+
+!&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+                        subroutine l_vertical_adjoint_spec              &
+!***********************************************************************
+!                                                                      !
+!  Adjoint of linear interpolations in vertical                        !
+!  from reslution nm to resolution km                                  !
+!                                                                      !
+!              (  nm = 2*km-1 )                                        !
+!                                                                      !
+!***********************************************************************
+(km3,nm,km,imin,imax,jmin,jmax,W,F)
+implicit none
+!-----------------------------------------------------------------------
+integer(i_kind), intent(in):: km3,nm,km,imin,imax,jmin,jmax
+real(r_kind), dimension(1:km3,imin:imax,jmin:jmax,1:nm), intent(in):: W
+real(r_kind), dimension(1:km3,imin:imax,jmin:jmax,1:km), intent(out):: F
+integer(i_kind):: k,n
+!-----------------------------------------------------------------------
+!$OMP PARALLEL
+!$OMP PRIVATE(n,k)
+  F = 0.
+
+      k=1
+  do n=2,nm-1,2
+    F(:,:,:,k  ) = F(:,:,:,k  )+0.5*W(:,:,:,n)
+    F(:,:,:,k+1) = F(:,:,:,k+1)+0.5*W(:,:,:,n)
+      k=k+1
+  enddo
+
+      k=1
+  do n=1,nm,2
+    F(:,:,:,k  ) = F(:,:,:,k  )+    W(:,:,:,n)
+      k=k+1
+  enddo
+
+!$OMP END PARALLEL
+!-----------------------------------------------------------------------
+                        endsubroutine l_vertical_adjoint_spec
+
+!&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+                        subroutine l_vertical_direct_spec               &
+!***********************************************************************
+!                                                                      !
+!                                                                      !
+!  Direct linear interpolations in vertical                            !
+!  from reslution nm to resolution km                                  !
+!                                                                      !
+!              (  nm = 2*km-1 )                                        !
+!                                                                      !
+!***********************************************************************
+(km3,km,nm,imin,imax,jmin,jmax,F,W)
+implicit none
+!-----------------------------------------------------------------------
+integer(i_kind), intent(in):: km3,km,nm,imin,imax,jmin,jmax
+real(r_kind), dimension(1:km3,imin:imax,jmin:jmax,1:km), intent(in):: F
+real(r_kind), dimension(1:km3,imin:imax,jmin:jmax,1:nm), intent(out):: W
+integer(i_kind):: k,n
+!-----------------------------------------------------------------------
+
+!$OMP PARALLEL
+!$OMP PRIVATE(n,k)
+
+      k=1
+  do n=1,nm,2
+    W(:,:,:,n) =F (:,:,:,k)
+      k=k+1
+  enddo
+
+      k=1
+  do n=2,nm-1,2
+    W(:,:,:,n) = 0.5*(F(:,:,:,k)+F(:,:,:,k+1))
+      k=k+1
+  enddo
+    
+!$OMP END PARALLEL
+!-----------------------------------------------------------------------
+                        endsubroutine l_vertical_direct_spec
+
 !&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
                         subroutine lsqr_direct_offset                   &
 !***********************************************************************
@@ -463,20 +610,22 @@ enddo
 ! using two passes of 1d interpolator                                  !
 !                                                                      !
 !***********************************************************************
-(V,W,km)
+(V,W,km,ibm,jbm)
 !-----------------------------------------------------------------------
 implicit none
-integer(i_kind),intent(in):: km
-real(r_kind), dimension(km,1-ib:im+ib,1-jb:jm+jb), intent(in):: V
+integer(i_kind),intent(in):: km,ibm,jbm
+real(r_kind), dimension(km,1-ibm:im+ibm,1-jbm:jm+jbm), intent(in):: V
 real(r_kind), dimension(km,1:nm,1:mm),intent(out):: W  
 
-real(r_kind), dimension(km,1:nm,j0-jb:jm+jb):: VX
+real(r_kind), dimension(km,1:nm,1-jb:jm+jbm):: VX
 integer(i_kind):: i,j,n,m
 real(r_kind),dimension(km):: v0,v1,v2,v3     
 !-----------------------------------------------------------------------
 
+!$OMP PARALLEL
+!$OMP PRIVATE(j,n,i,v0,v1,v2,v3)
 
-   do j=j0-jb,jm+jb
+   do j=1-jbm,jm+jbm
    do n=1,nm
        i = iref(n)
      v0(:)=V(:,i  ,j)
@@ -498,6 +647,7 @@ real(r_kind),dimension(km):: v0,v1,v2,v3
    enddo
    enddo
 
+!$OMP END PARALLEL
 !-----------------------------------------------------------------------
                         endsubroutine lsqr_direct_offset
 
@@ -511,17 +661,22 @@ real(r_kind),dimension(km):: v0,v1,v2,v3
 !                      - offset version -                              !
 !                                                                      !
 !***********************************************************************
-(W,V,km)
+(W,V,km,ibm,jbm)
 !-----------------------------------------------------------------------
 implicit none
-integer(i_kind):: km
+integer(i_kind):: km,ibm,jbm
 real(r_kind), dimension(km,1:nm,1:mm),intent(in):: W  
-real(r_kind), dimension(km,1-ib:im+ib,1-jb:jm+jb), intent(out):: V
-real(r_kind), dimension(km,1:nm,j0-jb:jm+jb):: VX
+real(r_kind), dimension(km,1-ibm:im+ibm,1-jbm:jm+jbm), intent(out):: V
+real(r_kind), dimension(km,1:nm,1-jbm:jm+jbm):: VX
+real(r_kind), dimension(km):: wk
+real(r_kind), dimension(km):: vxk
 integer(i_kind):: i,j,n,m,l,k
 integer(i_kind):: ip1,ip2,ip3
 integer(i_kind):: jp1,jp2,jp3
+real(r_kind):: c0,c1,c2,c3
 !-----------------------------------------------------------------------
+!$OMP PARALLEL
+!$OMP PRIVATE(j,m,n,i,c0,c1,c2,c3,wk,vxk)
 
    V(:,:,:) = 0.
 
@@ -529,34 +684,230 @@ integer(i_kind):: jp1,jp2,jp3
 
    do m=1,mm
      j = jref(m)
-     jp1=j+1
-     jp2=j+2
-     jp3=j+3
+     c0 = cy0(m)
+     c1 = cy1(m)
+     c2 = cy2(m)
+     c3 = cy3(m)
    do n=1,nm
-     VX(:,n,j  ) = VX(:,n,j  )+W(:,n,m)*cy0(m)
-     VX(:,n,jp1) = VX(:,n,jp1)+W(:,n,m)*cy1(m)
-     VX(:,n,jp2) = VX(:,n,jp2)+W(:,n,m)*cy2(m)
-     VX(:,n,jp3) = VX(:,n,jp3)+W(:,n,m)*cy3(m)
+       wk(:)=W(:,n,m)
+     VX(:,n,j  ) = VX(:,n,j  )+wk(:)*c0
+     VX(:,n,j+1) = VX(:,n,j+1)+wk(:)*c1
+     VX(:,n,j+2) = VX(:,n,j+2)+wk(:)*c2
+     VX(:,n,j+3) = VX(:,n,j+3)+wk(:)*c3
    enddo
    enddo
  
 
-   do j=j0-jb,jm+jb
    do n=1,nm
      i = iref(n)
-     ip1=i+1
-     ip2=i+2
-     ip3=i+3
-
-     V(:,i  ,j) = V(:,i  ,j)+VX(:,n,j)*cx0(n)
-     V(:,ip1,j) = V(:,ip1,j)+VX(:,n,j)*cx1(n)
-     V(:,ip2,j) = V(:,ip2,j)+VX(:,n,j)*cx2(n)
-     V(:,ip3,j) = V(:,ip3,j)+VX(:,n,j)*cx3(n)
+     c0 = cx0(n)
+     c1 = cx1(n)
+     c2 = cx2(n)
+     c3 = cx3(n)
+   do j=1-jbm,jm+jbm
+       vxk(:)=VX(:,n,j)
+     V(:,i  ,j) = V(:,i  ,j)+vxk(:)*c0
+     V(:,i+1,j) = V(:,i+1,j)+vxk(:)*c1
+     V(:,i+2,j) = V(:,i+2,j)+vxk(:)*c2
+     V(:,i+3,j) = V(:,i+3,j)+vxk(:)*c3
    enddo
    enddo
 
+!$OMP END PARALLEL
 !-----------------------------------------------------------------------
                         endsubroutine lsqr_adjoint_offset
+
+!&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+                        subroutine quad_direct_offset                   &
+!***********************************************************************
+!                                                                      !
+! Given a source array  V(km,i0-ib:im+ib,j0-jb:jm+jb) perform          !
+! direct interpolations to get target array W(km,1:nm,1:mm)            !
+! using two passes of 1d interpolator                                  !
+!                                                                      !
+!***********************************************************************
+(V,W,km,ibm,jbm)
+!-----------------------------------------------------------------------
+implicit none
+integer(i_kind),intent(in):: km,ibm,jbm
+real(r_kind), dimension(km,1-ibm:im+ibm,1-jbm:jm+jbm), intent(in):: V
+real(r_kind), dimension(km,1:nm,1:mm),intent(out):: W  
+
+real(r_kind), dimension(km,1:nm,1-jbm:jm+jbm):: VX
+integer(i_kind):: i,j,n,m
+real(r_kind),dimension(km):: v0,v1,v2
+!-----------------------------------------------------------------------
+
+!$OMP PARALLEL
+!$OMP PRIVATE(i,j,n,m,v0,v1,v2)
+
+   do j=1-jbm,jm+jbm
+   do n=1,nm
+       i = irefq(n)
+     v0(:)=V(:,i  ,j)
+     v1(:)=V(:,i+1,j)
+     v2(:)=V(:,i+2,j)
+     VX(:,n,j) = qx0(n)*v0(:)+qx1(n)*v1(:)+qx2(n)*v2(:)
+   enddo
+   enddo
+
+   do m=1,mm
+     j = jrefq(m)
+   do n=1,nm
+     v0(:)=VX(:,n,j  ) 
+     v1(:)=VX(:,n,j+1) 
+     v2(:)=VX(:,n,j+2) 
+     W(:,n,m) =  qy0(m)*v0(:)+qy1(m)*v1(:)+qy2(m)*v2(:)
+   enddo
+   enddo
+
+!$OMP END PARALLEL
+!-----------------------------------------------------------------------
+                        endsubroutine quad_direct_offset
+
+!&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+                        subroutine quad_adjoint_offset                  &
+!***********************************************************************
+!                                                                      !
+! Given a target array W(km,1:nm,1:mm) perform adjoint                 !
+! interpolations to get source array V(km,i0-ib:im+ib,j0-jb:jm+jb)     !
+! using two passes of 1d interpolator                                  !
+!                      - offset version -                              !
+!                                                                      !
+!***********************************************************************
+(W,V,km,ibm,jbm)
+!-----------------------------------------------------------------------
+implicit none
+integer(i_kind):: km,ibm,jbm
+real(r_kind), dimension(km,1:nm,1:mm),intent(in):: W  
+real(r_kind), dimension(km,1-ibm:im+ibm,1-jbm:jm+jbm), intent(out):: V
+real(r_kind), dimension(km,1:nm,1-jbm:jm+jbm):: VX
+real(r_kind), dimension(km):: wk
+real(r_kind), dimension(km):: vxk
+integer(i_kind):: i,j,n,m,l,k
+real(r_kind):: c0,c1,c2
+!-----------------------------------------------------------------------
+!$OMP PARALLEL
+!$OMP PRIVATE(j,m,n,i,c0,c1,c2,wk,vxk)
+
+   V(:,:,:) = 0.
+
+   VX(:,:,:)=0.
+
+   do m=1,mm
+     j = jrefq(m)
+     c0 = qy0(m)
+     c1 = qy1(m)
+     c2 = qy2(m)
+   do n=1,nm
+       wk(:)=W(:,n,m)
+     VX(:,n,j  ) = VX(:,n,j  )+wk(:)*c0
+     VX(:,n,j+1) = VX(:,n,j+1)+wk(:)*c1
+     VX(:,n,j+2) = VX(:,n,j+2)+wk(:)*c2
+   enddo
+   enddo
+ 
+
+   do n=1,nm
+     i = irefq(n)
+     c0 = qx0(n)
+     c1 = qx1(n)
+     c2 = qx2(n)
+   do j=1-jbm,jm+jbm
+       vxk(:)=VX(:,n,j)
+     V(:,i  ,j) = V(:,i  ,j)+vxk(:)*c0
+     V(:,i+1,j) = V(:,i+1,j)+vxk(:)*c1
+     V(:,i+2,j) = V(:,i+2,j)+vxk(:)*c2
+   enddo
+   enddo
+
+!$OMP END PARALLEL
+!-----------------------------------------------------------------------
+                        endsubroutine quad_adjoint_offset
+
+!&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+                        subroutine l_vertical_adjoint_spec2             &
+!***********************************************************************
+!                                                                      !
+!  Adjoint of linear interpolations in vertical                        !
+!  from reslution nm to resolution km                                  !
+!                                                                      !
+!              (  nm = 2*km-1 )                                        !
+!                                                                      !
+!***********************************************************************
+(en,nm,km,imin,imax,jmin,jmax,W,F)
+implicit none
+!-----------------------------------------------------------------------
+integer(i_kind), intent(in):: en,nm,km,imin,imax,jmin,jmax
+real(r_kind), dimension(1:nm*en,imin:imax,jmin:jmax), intent(in):: W
+real(r_kind), dimension(1:km*en,imin:imax,jmin:jmax), intent(out):: F
+integer(i_kind):: k,n,e,enm,ekm
+!-----------------------------------------------------------------------
+!$OMP PARALLEL
+!$OMP PRIVATE(n,k)
+  F = 0.
+
+do e=0,en-1
+  enm = e*nm
+  ekm = e*km
+      k=1
+  do n=2,nm-1,2
+    F(ekm+k  ,:,:) = F(ekm+k  ,:,:)+0.5*W(enm+n,:,:)
+    F(ekm+k+1,:,:) = F(ekm+k+1,:,:)+0.5*W(enm+n,:,:)
+      k=k+1
+  enddo
+
+      k=1
+  do n=1,nm,2
+    F(ekm+k,:,:) = F(ekm+k,:,:) +  W(enm+n,:,:)
+      k=k+1
+  enddo
+enddo
+
+!$OMP END PARALLEL
+!-----------------------------------------------------------------------
+                        endsubroutine l_vertical_adjoint_spec2
+
+!&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+                        subroutine l_vertical_direct_spec2              &
+!***********************************************************************
+!                                                                      !
+!                                                                      !
+!  Direct linear interpolations in vertical                            !
+!  from reslution nm to resolution km                                  !
+!                                                                     !
+!              (  nmax = 2*kmax-1 )                                    !
+!                                                                      !
+!***********************************************************************
+(en,km,nm,imin,imax,jmin,jmax,F,W)
+implicit none
+!-----------------------------------------------------------------------
+integer(i_kind), intent(in):: en,km,nm,imin,imax,jmin,jmax
+real(r_kind), dimension(1:km*en,imin:imax,jmin:jmax), intent(in):: F
+real(r_kind), dimension(1:nm*en,imin:imax,jmin:jmax), intent(out):: W
+integer(i_kind):: k,n,e,enm,ekm
+!-----------------------------------------------------------------------
+!$OMP PARALLEL
+!$OMP PRIVATE(n,k)
+
+do e=0,en-1
+  enm = e*nm
+  ekm = e*km
+      k=1
+  do n=1,nm,2
+    W(enm+n,:,:) =F (ekm+k,:,:)
+      k=k+1
+  enddo
+      k=1
+  do n=2,nm-1,2
+    W(enm+n,:,:) = 0.5*(F(ekm+k,:,:)+F(ekm+k+1,:,:))
+      k=k+1
+  enddo
+enddo
+    
+!$OMP END PARALLEL
+!-----------------------------------------------------------------------
+                        endsubroutine l_vertical_direct_spec2
 
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
                         endmodule mg_interpolate
