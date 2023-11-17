@@ -1,97 +1,73 @@
 &PARAMETERS_MGBETA
 !------------------------------------------------------------------------------
+! G4,G3
+!  mg_ampl01=5., mg_ampl02=1.0, mg_ampl03=1.,
   mg_ampl01=5., mg_ampl02=1.0, mg_ampl03=1.,
+!------------------------------------------------------------------------------
+! G4
+!  mg_weig1=1.,mg_weig2=.5,mg_weig3=.5,mg_weig4=125.,mg_weig5=1.,
+!------------------------------------------------------------------------------
+! G3
   mg_weig1=1.,mg_weig2=50.,mg_weig3=125.,mg_weig4=1.,mg_weig5=1.,
 !------------------------------------------------------------------------------
+
 !  hx=8,hy=8,hz=8,p=1.3,
 !  hx=7,hy=7,hz=7,p=1.3,
   hx=6,hy=6,hz=6,p=1.3,
 
 !
 !  mgbf_line=.false., mgbf_proc=1,
-!  mgbf_line=.false., mgbf_proc=2, 
-!  mgbf_line=.true.,  mgbf_proc=3,
+!  mgbf_line=.false., mgbf_proc=2,     ! **
+!  mgbf_line=.false., mgbf_proc=3,
 !  mgbf_line=.true.,  mgbf_proc=4,
+!  mgbf_line=.true., mgbf_proc=5,
+!  mgbf_line=.true., mgbf_proc=6,
+!  mgbf_line=.false., mgbf_proc=7,
 
-! for background (2d + 1d)
+!*  mgbf_line=.false., mgbf_proc=11,
+!*  mgbf_line=.true., mgbf_proc=12,
+  mgbf_line=.false., mgbf_proc=13,
 
-!*  mgbf_line=.false., mgbf_proc=1,
-!*  mgbf_line=.true.,  mgbf_proc=2,
-!*  mgbf_line=.false., mgbf_proc=3,
-
-! for background (3d)
-
-!  mgbf_line=.true.,  mgbf_proc=4,
-  mgbf_line=.false., mgbf_proc=5,
-
-! for ensemble
-
-!!  mgbf_line=.false., mgbf_proc=6,
-!!  mgbf_line=.true.,  mgbf_proc=7,
-!!  mgbf_line=.false., mgbf_proc=8,
-
+!  mgbf_line=.false., mgbf_proc=8,
+!  mgbf_line=.false., mgbf_proc=9,
+!  mgbf_line=.false., mgbf_proc=0,  ! for adjoint testing
 
 !------------------------------------------------------------------------------
 !
 !vertical resolutions
-
     lm_a = 65,
-    lm = 65,
-!*    lm = 33,
-
+!*    lm = 65,
+    lm = 33,
 !    lmf = 48, lmh = 48,
 !    lmf = 48, lmh = 24,
 !    lmf = 50, lmh = 25,
 !
 !Number of 2d and 3d variables
 
-!*   km2=0,km3=6,
-   km2=4,km3=6,
-
-!*   n_ens=20,
-   n_ens=1
-
+!   km2=4,km3=6,
+   km2=0,km3=6,
+   n_ens=20,
    l_loc=.false.
    l_loc_vertical=.false.,
-
-!*   l_filt_g1 =.false.,
-   l_filt_g1 =.true.,
-
-! Choose interpolations in vertical
-
+!*   l_filt_g1 =.true.,
+   l_filt_g1 =.false.,
 !*   l_lin_vertical=.false.,
    l_lin_vertical=.true.,
-
-! Choose interpolations in horizontal
-
-!*   l_lin_horizontal=.true.
-   l_lin_horizontal=.false.
-!*   l_quad_horizontal=.true.,
-   l_quad_horizontal=.false.,
-
+!*   l_quad_horizontal=.false.,
+   l_quad_horizontal=.true.,
    l_new_map=.true.,
-
-! Flag for vertical filtering 
-
-   l_vertical_filter=.true.,
 
 !For standalone tests (plotting)
 !    ldelta=.false.,
     ldelta=.true.,
-
-! Chose interpolations in up/downsending
-
-    lquart=.false.,
-!    lquart=.true.,
-
-! Chose Helmholtz weighting
-
+!    lquart=.false.,
+    lquart=.true.,
     lhelm=.false.,
 !
-! Choose number of generations (for ensemble)
+! Number of generations
 !
-    gm_max=4,
-!*    gm_max=3,
+!*    gm_max=4,
+    gm_max=3,
 
 !for cross covarinces
 !
@@ -119,8 +95,8 @@
 
 !FOR 400 PES:
 !  nxPE=20,nyPE=20,im_filt=72,jm_filt=48,
-  nxPE=20,nyPE=20,im_filt=64,jm_filt=32,
-!*  nxPE=20,nyPE=20,im_filt=32,jm_filt=16,
+!*  nxPE=20,nyPE=20,im_filt=64,jm_filt=32,
+  nxPE=20,nyPE=20,im_filt=32,jm_filt=16,
 
 !FOR 64 PES:
 !  nxPE=8,nyPE=8,im_filt=42,jm_filt=42,
