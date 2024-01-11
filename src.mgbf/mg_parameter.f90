@@ -191,10 +191,9 @@ integer(i_kind):: g
                               ,mg_weig1,mg_weig2,mg_weig3,mg_weig4      &
                               ,mg_weig5                                 &
                               ,hx,hy,hz,p                               &
-                              ,mgbf_line,mgbf_proc                      &
+                              ,mgbf_line,mgbf_proc,n_ens                &
                               ,lm_a,lm                                  &
                               ,km2,km3                                  &
-                              ,n_ens                                    &
                               ,l_loc                                    &
                               ,l_loc_vertical                           &
                               ,l_filt_g1                                &

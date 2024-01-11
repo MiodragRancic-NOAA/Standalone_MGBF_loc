@@ -387,13 +387,14 @@ integer(i_kind):: ibm,jbm
 !***
 !***  Apply adjoint lateral bc on PKF and WKF
 !***
-    
 
                                                  call btim(  bocoT_tim)
-
-       if(.not.l_lin_horizontal) then
+!
+! Big fixed - Sho
+!
+!       if(.not.l_lin_horizontal) then
          call bocoT_2d(VALL(1:km_all,1-ibm:im+ibm,1-jbm:jm+jbm),km_all,im,jm,ibm,jbm)
-       endif
+!       endif
 
                                                  call etim(  bocoT_tim)
  
@@ -437,9 +438,12 @@ integer(i_kind):: ibm,jbm
 !***
                                                  call btim(  boco_tim)
 
-       if(.not.l_lin_horizontal) then
+!
+! Big fixed - Sho
+!
+!       if(.not.l_lin_horizontal) then
          call boco_2d(VALL(1:km_all,1-ibm:im+ibm,1-jbm:jm+jbm),km_all,im,jm,ibm,jbm)
-       endif
+!       endif
 
                                                  call etim(  boco_tim)
 

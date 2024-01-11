@@ -302,6 +302,16 @@ allocate(cvh4(1:lm))                                   ; cvh4=0.
 integer(i_kind):: i,j,L
 real(r_kind):: gen_fac
 !-----------------------------------------------------------------------
+if(mype.eq.0) then
+  open(unit=10,file='a01.dat',status='new',action='write')
+    write(10,'(f5.2)') pasp01
+  close(10)
+
+  open(unit=10,file='a02.dat',status='new',action='write')
+    write(10,'(f5.2)') pasp02
+  close(10)
+endif
+!-----------------------------------------------------------------------
 
       p_eps(:,:)=0.0
       p_del(:,:)=0.0

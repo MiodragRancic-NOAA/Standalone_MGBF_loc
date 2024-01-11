@@ -301,7 +301,7 @@ allocate(HM2D(km2,1-hx:im+hx,1-hy:jm+hy   ))                 ; HM2D=0.
 allocate(W(km3,1-hx:im+hx,1-hy:jm+hy,1-hz:lm+hz))            ; W=0.
 allocate(H(km3,1-hx:im+hx,1-hy:jm+hy,1-hz:lm+hz))            ; H=0.
 
-allocate(JCOL(0:im,0:jm,1:Lm))                               ; JCOL=0
+allocate(JCOL(1:im,1:jm,1:Lm))                               ; JCOL=0
 
 !-----------------------------------------------------------------------
 
@@ -930,21 +930,14 @@ endif
 ! Horizonatally
 
                                                  call btim( boco_tim)
-     call bocox(VALL,km,im,jm,hx,hy)
+      call bocoy(HALL,km,im,jm,hx,hy,Fimax,Fjmax,2,gm)
                                                  call etim( boco_tim)
                                                  call btim( hfilt_tim)
-    do j=1,jm
-      call rbeta(km,hx,1,im,paspx,ssx,VALL(:,:,j))
-    enddo
-                                                 call etim( hfilt_tim)
-
-                                                 call btim( boco_tim)
-      call bocoy(VALL,km,im,jm,hx,hy)
-                                                 call etim( boco_tim)
-                                                 call btim( hfilt_tim)
+  if(l_hgen)  then
     do i=1,im
-      call rbeta(km,hy,1,jm,paspy,ssy,VALL(:,i,:))
+      call rbeta(km,hy,1,jm,paspy,ssy,HALL(:,i,:))
     enddo
+  endif
                                                  call etim( hfilt_tim)
 
                                                  call btim( boco_tim)
@@ -957,15 +950,23 @@ endif
     enddo
   endif
                                                  call etim( hfilt_tim)
+
                                                  call btim( boco_tim)
-      call bocoy(HALL,km,im,jm,hx,hy,Fimax,Fjmax,2,gm)
+      call bocoy(VALL,km,im,jm,hx,hy)
                                                  call etim( boco_tim)
                                                  call btim( hfilt_tim)
-  if(l_hgen)  then
     do i=1,im
-      call rbeta(km,hy,1,jm,paspy,ssy,HALL(:,i,:))
+      call rbeta(km,hy,1,jm,paspy,ssy,VALL(:,i,:))
     enddo
-  endif
+                                                 call etim( hfilt_tim)
+
+                                                 call btim( boco_tim)
+     call bocox(VALL,km,im,jm,hx,hy)
+                                                 call etim( boco_tim)
+                                                 call btim( hfilt_tim)
+    do j=1,jm
+      call rbeta(km,hx,1,im,paspx,ssx,VALL(:,:,j))
+    enddo
                                                  call etim( hfilt_tim)
 
 !fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
@@ -994,6 +995,7 @@ endif
 
 !-----------------------------------------------------------------------
                         endsubroutine filtering_fast_bckg
+
 !&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
                         subroutine filtering_rad2_ens
 !***********************************************************************
@@ -1428,6 +1430,17 @@ endif
 !fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 
   if(l_filt_g1) then
+
+                                                 call btim( boco_tim)
+      call bocoy(VALL,km_all,im,jm,hx,hy)
+                                                 call etim( boco_tim)
+
+                                                 call btim( hfilt_tim)
+    do i=1,im
+      call rbeta(km_all,hy,1,jm,paspy,ssy,VALL(:,i,:))
+    enddo
+                                                 call etim( hfilt_tim)
+
                                                  call btim( boco_tim)
      call bocox(VALL,km_all,im,jm,hx,hy)
                                                  call etim( boco_tim)
@@ -1436,27 +1449,8 @@ endif
       call rbeta(km_all,hx,1,im,paspx,ssx,VALL(:,:,j))
     enddo
                                                  call etim( hfilt_tim)
+  endif
 
-                                                 call btim( boco_tim)
-      call bocoy(VALL,km_all,im,jm,hx,hy)
-                                                 call etim( boco_tim)
-                                                 call btim( hfilt_tim)
-    do i=1,im
-      call rbeta(km_all,hy,1,jm,paspy,ssy,VALL(:,i,:))
-    enddo
-                                                 call etim( hfilt_tim)
-  endif
-                                                 call btim( boco_tim)
-      call bocox(HALL,km_all,im,jm,hx,hy,Fimax,Fjmax,2,gm)
-                                                 call etim( boco_tim)
-       
-  if(l_hgen)  then
-                                                 call btim( hfilt_tim)
-    do j=1,jm
-      call rbeta(km_all,hx,1,im,paspx,ssx,HALL(:,:,j))
-    enddo
-                                                 call etim( hfilt_tim)
-  endif
 
                                                  call btim( boco_tim)
       call bocoy(HALL,km_all,im,jm,hx,hy,Fimax,Fjmax,2,gm)
@@ -1465,6 +1459,18 @@ endif
                                                  call btim( hfilt_tim)
     do i=1,im
       call rbeta(km_all,hy,1,jm,paspy,ssy,HALL(:,i,:))
+    enddo
+                                                 call etim( hfilt_tim)
+  endif
+
+                                                 call btim( boco_tim)
+      call bocox(HALL,km_all,im,jm,hx,hy,Fimax,Fjmax,2,gm)
+                                                 call etim( boco_tim)
+       
+  if(l_hgen)  then
+                                                 call btim( hfilt_tim)
+    do j=1,jm
+      call rbeta(km_all,hx,1,im,paspx,ssx,HALL(:,:,j))
     enddo
                                                  call etim( hfilt_tim)
   endif
